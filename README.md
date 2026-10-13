@@ -1,4 +1,4 @@
-# AgenticHR
+# Praxis
 # AI Interview Coach
 
 **Practice technical interviews out loud, with an AI interviewer that actually explains your feedback.**
