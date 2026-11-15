@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import Background from '../components/Background';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
 
 /* ─── Tiny helpers ─────────────────────────────────────────── */
 
@@ -196,6 +197,9 @@ function VideoPlayer({ interview }) {
 /* ─── Main Page ──────────────────────────────────────────────── */
 export default function InterviewReportPage({ interview, onBack }) {
   const headerRef = useRef(null);
+
+  // Text-to-Speech: reads AI feedback aloud
+  const { isSpeaking, speak, stop } = useTextToSpeech();
 
   // Scroll to top on mount
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
@@ -447,7 +451,32 @@ export default function InterviewReportPage({ interview, onBack }) {
               </div>
               <p className="text-xs text-neutral-400 font-mono pl-1">AI-generated coaching notes based on your session</p>
             </div>
-            <Icon icon="solar:stars-minimalistic-bold-duotone" className="text-neutral-400 text-3xl group-hover:text-white transition-colors" />
+            <div className="flex items-center gap-3">
+              {/* 🔊 Read Aloud button — TTS reads all tips */}
+              <button
+                type="button"
+                onClick={() =>
+                  isSpeaking
+                    ? stop()
+                    : speak(
+                        `Here is your AI coaching feedback. What you did well: ${goodTips.join('. ')}. Areas to improve: ${improveTips.join('. ')}.`
+                      )
+                }
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border transition-all cursor-pointer active:scale-95 ${
+                  isSpeaking
+                    ? 'bg-emerald-400/10 border-emerald-400/30 text-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]'
+                    : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white hover:border-white/25'
+                }`}
+                title={isSpeaking ? 'Stop reading' : 'Read all tips aloud'}
+              >
+                <Icon
+                  icon={isSpeaking ? 'solar:stop-bold' : 'solar:volume-loud-bold-duotone'}
+                  className="text-sm"
+                />
+                {isSpeaking ? 'Stop' : 'Read Aloud'}
+              </button>
+              <Icon icon="solar:stars-minimalistic-bold-duotone" className="text-neutral-400 text-3xl group-hover:text-white transition-colors" />
+            </div>
           </div>
 
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6">

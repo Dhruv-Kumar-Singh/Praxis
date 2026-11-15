@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import gsap from 'gsap';
 import Background from '../components/Background';
+import { useSpeechToText } from '../hooks/useSpeechToText';
 
 export default function HomePage({ userName = 'Alex', onViewReport }) {
   const [topicInput, setTopicInput] = useState('');
@@ -12,6 +13,10 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
   const hooklineRef = useRef(null);
   const composerRef = useRef(null);
   const scrollCueRef = useRef(null);
+
+  // Speech-to-Text: mic button fills the textarea with spoken words
+  const { isListening, startListening, stopListening, isSupported: sttSupported } =
+    useSpeechToText({ onTranscript: (text) => setTopicInput(text) });
 
   // Soft entrance animation matching landing page hero
   useEffect(() => {
@@ -314,8 +319,32 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
                 >
                   <Icon icon="solar:add-linear" className="text-lg" />
                 </button>
+
+                {/* 🎤 Mic button — Speech-to-Text */}
+                {sttSupported && (
+                  <button
+                    type="button"
+                    onClick={isListening ? stopListening : startListening}
+                    className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer active:scale-95 shadow-sm ${
+                      isListening
+                        ? 'border-red-400/50 bg-red-400/10 text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.3)] animate-pulse'
+                        : 'border-white/15 hover:border-white/35 bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white'
+                    }`}
+                    title={isListening ? 'Stop recording' : 'Speak your topic'}
+                  >
+                    <Icon
+                      icon={isListening ? 'solar:microphone-bold' : 'solar:microphone-linear'}
+                      className="text-lg"
+                    />
+                  </button>
+                )}
+
                 <span className="text-[11px] font-mono text-neutral-500 hidden sm:inline">
-                  {attachedFiles.length > 0 ? `${attachedFiles.length} file attached` : 'Attach syllabus or notes'}
+                  {isListening
+                    ? 'Listening...'
+                    : attachedFiles.length > 0
+                    ? `${attachedFiles.length} file attached`
+                    : 'Attach syllabus or notes'}
                 </span>
               </div>
 
