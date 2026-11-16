@@ -12,7 +12,7 @@ describe('Overrides & Original Value Preservation', () => {
   let report;
 
   beforeEach(async () => {
-    __resetStore();
+    await __resetStore();
 
     const candidate = await userRepo.create({
       email: 'cand@test.com',

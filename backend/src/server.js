@@ -1,8 +1,18 @@
 import http from 'http';
+import mongoose from 'mongoose';
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { attachWebSocket } from './realtime/wsServer.js';
 import { logger } from './utils/logger.js';
+
+if (env.REPO_DRIVER === 'mongo') {
+  try {
+    await mongoose.connect(env.MONGODB_URI);
+    logger.info(`MongoDB connected to ${env.MONGODB_URI}`);
+  } catch (err) {
+    logger.error(`MongoDB initial connection failed: ${err.message}`);
+  }
+}
 
 const server = http.createServer(app);
 const wss = attachWebSocket(server);

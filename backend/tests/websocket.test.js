@@ -31,7 +31,7 @@ describe('WebSocket Interview Handshake (/ws/interview)', () => {
   });
 
   beforeEach(async () => {
-    __resetStore();
+    await __resetStore();
 
     const user = await userRepo.create({
       email: 'alex@praxis.internal',

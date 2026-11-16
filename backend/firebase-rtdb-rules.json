@@ -1,0 +1,82 @@
+{
+  "rules": {
+    // ─── Default deny everything ──────────────────────────────────────────────
+    ".read": false,
+    ".write": false,
+
+    // ─── users ────────────────────────────────────────────────────────────────
+    "users": {
+      ".indexOn": ["email"],
+      "$userId": {
+        // A user can read/write their own record; admins can read all.
+        ".read": "auth != null && (auth.uid === $userId || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && (auth.uid === $userId || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+      }
+    },
+
+    // ─── sessions ─────────────────────────────────────────────────────────────
+    "sessions": {
+      ".indexOn": ["candidateId", "status"],
+      "$sessionId": {
+        // Session owner or admin can read; server (no auth) is blocked — use Admin SDK.
+        ".read": "auth != null && (root.child('sessions').child($sessionId).child('candidateId').val() === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'recruiter')",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    // ─── reports ──────────────────────────────────────────────────────────────
+    "reports": {
+      ".indexOn": ["sessionId"],
+      "$reportId": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    // ─── overrides  (append-only; no updates/deletes) ─────────────────────────
+    "overrides": {
+      ".indexOn": ["sessionId"],
+      "$overrideId": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() !== 'candidate'",
+        // Admins/recruiters can create but cannot update or delete
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin' && !data.exists()"
+      }
+    },
+
+    // ─── audit_logs  (append-only; no updates/deletes) ────────────────────────
+    "audit_logs": {
+      ".indexOn": ["entity"],
+      "$logId": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        ".write": "auth != null && !data.exists()" // create-only
+      }
+    },
+
+    // ─── notifications ────────────────────────────────────────────────────────
+    "notifications": {
+      ".indexOn": ["userId", "status"],
+      "$notifId": {
+        ".read": "auth != null && root.child('notifications').child($notifId).child('userId').val() === auth.uid",
+        ".write": "auth != null && root.child('notifications').child($notifId).child('userId').val() === auth.uid"
+      }
+    },
+
+    // ─── interview_chunks ─────────────────────────────────────────────────────
+    "interview_chunks": {
+      ".indexOn": ["sessionId"],
+      "$chunkId": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    // ─── refresh_tokens  (server-side only; never expose to clients) ──────────
+    "refresh_tokens": {
+      ".indexOn": ["userId"],
+      ".read": false,
+      ".write": false
+      // Only the backend service account (Admin SDK, which bypasses rules) can
+      // read and write this node. Never relax these rules.
+    }
+  }
+}

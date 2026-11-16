@@ -4,16 +4,31 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { validate } from '../middleware/validate.js';
 
 const createSchema = z.object({
-  role: z.string().min(1),
+  role: z.string().optional().default('Full-Stack Developer'),
   topic: z.string().min(1),
-  status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled']).default('scheduled'),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium'),
+  expectedDurationMin: z.number().int().positive().optional().default(30),
+  status: z.enum(['draft', 'scheduled', 'in_progress', 'completed', 'cancelled']).default('scheduled'),
   config: z.record(z.unknown()).optional(),
 });
 
 const updateSchema = z.object({
   role: z.string().optional(),
   topic: z.string().optional(),
-  status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled']).optional(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  expectedDurationMin: z.number().int().positive().optional(),
+  status: z.enum([
+    'draft',
+    'scheduled',
+    'in_progress',
+    'processing',
+    'feedback_ready',
+    'processing_failed',
+    'completed',
+    'failed',
+    'cancelled',
+    'abandoned',
+  ]).optional(),
   config: z.record(z.unknown()).optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'At least one field required' });
 
@@ -46,6 +61,26 @@ export const sessionsController = {
   delete: asyncHandler(async (req, res) => {
     await sessionService.delete(req.params.id, req.user, req.ip);
     res.status(204).end();
+  }),
+
+  start: asyncHandler(async (req, res) => {
+    const result = await sessionService.startSession(req.params.id, req.user, req.ip);
+    res.json(result);
+  }),
+
+  nextQuestion: asyncHandler(async (req, res) => {
+    const result = await sessionService.generateNextQuestion(req.params.id, req.body, req.user, req.ip);
+    res.json(result);
+  }),
+
+  getTranscript: asyncHandler(async (req, res) => {
+    const chunks = await sessionService.getTranscript(req.params.id, req.user);
+    res.json(chunks);
+  }),
+
+  retryEval: asyncHandler(async (req, res) => {
+    const result = await sessionService.retryEval(req.params.id, req.user, req.ip);
+    res.json(result);
   }),
 
   mintToken: asyncHandler(async (req, res) => {
