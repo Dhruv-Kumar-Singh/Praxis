@@ -42,7 +42,13 @@ router.get('/:id', c.getById);
 router.patch('/:id', c.validateUpdate, c.update);
 router.delete('/:id', roleGuard('admin'), c.delete);
 
-// Interview Token Minting
+// LiveKit & Realtime Interview Endpoints
+router.post('/:id/start', c.start);
+router.post('/:id/next-question', c.nextQuestion);
+router.get('/:id/transcript', c.getTranscript);
+router.post('/:id/retry', c.retryEval);
+
+// Interview Token Minting (legacy)
 router.post('/:id/interview-token', roleGuard('candidate', 'interviewer', 'admin'), c.mintToken);
 
 // Reports

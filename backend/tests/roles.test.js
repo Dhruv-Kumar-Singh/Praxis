@@ -11,7 +11,7 @@ describe('Role Guards & User Management', () => {
   let candidateUser;
 
   beforeEach(async () => {
-    __resetStore();
+    await __resetStore();
 
     // Create an admin
     const admin = await userRepo.create({

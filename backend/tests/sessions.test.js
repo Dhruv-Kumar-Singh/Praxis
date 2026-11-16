@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app.js';
-import { userRepo, sessionRepo, __resetStore } from '../src/repositories/index.js';
+import { userRepo, sessionRepo, chunkRepo, __resetStore } from '../src/repositories/index.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../src/config/env.js';
 
@@ -12,7 +12,7 @@ describe('Sessions & Token Minting API', () => {
   let otherToken;
 
   beforeEach(async () => {
-    __resetStore();
+    await __resetStore();
 
     candidateUser = await userRepo.create({
       email: 'cand@test.com',
@@ -51,6 +51,61 @@ describe('Sessions & Token Minting API', () => {
     expect(res.body.id).toBeDefined();
     expect(res.body.candidateId).toBe(candidateUser.id);
     expect(res.body.status).toBe('scheduled');
+  });
+
+  it('starts an interview and mints a LiveKit participant token', async () => {
+    const session = await sessionRepo.create({
+      candidateId: candidateUser.id,
+      topic: 'DSA',
+      difficulty: 'medium',
+      status: 'scheduled',
+    });
+
+    const res = await request(app)
+      .post(`/api/v1/sessions/${session.id}/start`)
+      .set('Authorization', `Bearer ${candidateToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.serverUrl).toBe(env.LIVEKIT_URL);
+    expect(res.body.participantToken).toBeDefined();
+    expect(res.body.roomName).toBe(`interview-${session.id}`);
+
+    // Verify session status transitioned to in_progress
+    const check = await sessionRepo.findById(session.id);
+    expect(check.status).toBe('in_progress');
+  });
+
+  it('retrieves the session transcript chunks', async () => {
+    const session = await sessionRepo.create({
+      candidateId: candidateUser.id,
+      topic: 'DBMS',
+      difficulty: 'hard',
+      status: 'in_progress',
+    });
+
+    await chunkRepo.create({
+      sessionId: session.id,
+      seq: 0,
+      role: 'interviewer',
+      text: 'Tell me about write-ahead logging.',
+    });
+
+    await chunkRepo.create({
+      sessionId: session.id,
+      seq: 1,
+      role: 'candidate',
+      text: 'WAL guarantees durability and atomicity by logging changes before writing to data pages.',
+    });
+
+    const res = await request(app)
+      .get(`/api/v1/sessions/${session.id}/transcript`)
+      .set('Authorization', `Bearer ${candidateToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].text).toContain('write-ahead logging');
+    expect(res.body[1].role).toBe('candidate');
   });
 
   it('mints an interview-scoped token', async () => {
@@ -109,4 +164,3 @@ describe('Sessions & Token Minting API', () => {
     expect(res.status).toBe(403);
   });
 });
-
