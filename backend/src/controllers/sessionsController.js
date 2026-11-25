@@ -77,7 +77,6 @@ export const sessionsController = {
     const result = await sessionService.endSession(req.params.id, req.body, req.user, req.ip);
     res.json(result);
   }),
-
   getTranscript: asyncHandler(async (req, res) => {
     const chunks = await sessionService.getTranscript(req.params.id, req.user);
     res.json(chunks);
