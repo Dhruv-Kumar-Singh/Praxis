@@ -14,7 +14,7 @@ const schema = z.object({
   MONGODB_URI: z.string().default('mongodb://127.0.0.1:27017/praxis'),
 
   // ── Orchestrator Internal API ──────────────────────────────────────────────
-  ORCHESTRATOR_URL: z.string().default('http://localhost:8000'),
+  ORCHESTRATOR_URL: z.string().default('http://127.0.0.1:8000'),
   ORCHESTRATOR_INTERNAL_SECRET: z.string().default('praxis_internal_dev_secret_32char_minimum'),
 
   // ── LiveKit Cloud ──────────────────────────────────────────────────────────
