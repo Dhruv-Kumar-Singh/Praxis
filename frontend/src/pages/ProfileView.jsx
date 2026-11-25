@@ -163,7 +163,8 @@ export default function ProfileView({
         </div>
       )}
 
-      {/* Subscription Modal (only active if free plan user opens it) */}
+      {/* Subscription Modal commented out - reserved for another version of the website */}
+      {/*
       {showSubscriptionModal && !isPremium && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="relative w-full max-w-lg rounded-3xl bg-[#090909] border border-white/20 p-8 sm:p-10 shadow-[0_0_60px_rgba(255,255,255,0.1)] overflow-hidden">
@@ -217,6 +218,7 @@ export default function ProfileView({
           </div>
         </div>
       )}
+      */}
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-32 pb-32 flex flex-col gap-12">
 
@@ -724,8 +726,8 @@ export default function ProfileView({
 
         </div>
 
-        {/* ── 5. Golden Premium Upsell Section (FREE PLAN ONLY) ── */}
-        {!isPremium && (
+        {/* ── 5. Golden Premium Upsell Section (Commented out - reserved for another version of the website) ── */}
+        {false /* Commented out for another version */ && !isPremium && (
           <div
             className="relative rounded-3xl overflow-hidden fade-up"
             style={{

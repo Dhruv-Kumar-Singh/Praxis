@@ -45,6 +45,7 @@ router.delete('/:id', roleGuard('admin'), c.delete);
 // LiveKit & Realtime Interview Endpoints
 router.post('/:id/start', c.start);
 router.post('/:id/next-question', c.nextQuestion);
+router.post('/:id/end', c.end);
 router.get('/:id/transcript', c.getTranscript);
 router.post('/:id/retry', c.retryEval);
 

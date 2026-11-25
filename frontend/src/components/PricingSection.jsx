@@ -17,6 +17,8 @@ const plans = [
       { text: 'Actionable feedback to improve', bold: false },
     ],
   },
+  /*
+  // Premium subscription plan - commented out (reserved for another version of the website)
   {
     name: 'Premium',
     badge: 'Most Popular',
@@ -34,6 +36,7 @@ const plans = [
       { text: 'Curated interview templates modeled on leading companies', bold: false },
     ],
   },
+  */
   {
     name: 'Professional',
     badge: null,
@@ -73,8 +76,8 @@ export default function PricingSection({ onGoToPremium, onGoToApp, onContactSale
           </p>
         </div>
 
-        {/* 3-Column Pricing Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch fade-up">
+        {/* Pricing Grid (2-column layout with Premium subscription commented out) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 max-w-5xl mx-auto gap-8 items-stretch fade-up">
           {plans.map((plan) => (
             <div
               key={plan.name}

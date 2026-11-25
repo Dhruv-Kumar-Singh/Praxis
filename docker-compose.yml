@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: praxis-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - praxis-net
+
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: praxis-orchestrator
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./orchestrator/.env
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/praxis
+    depends_on:
+      - mongodb
+    networks:
+      - praxis-net
+
+  agent-worker:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: praxis-agent-worker
+    restart: unless-stopped
+    command: ["python", "-m", "agent_worker.worker", "start"]
+    env_file:
+      - ./orchestrator/.env
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/praxis
+    depends_on:
+      - mongodb
+      - orchestrator
+    networks:
+      - praxis-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: praxis-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/praxis
+      - ORCHESTRATOR_URL=http://orchestrator:8000
+      - REPO_DRIVER=mongo
+    depends_on:
+      - mongodb
+      - orchestrator
+    networks:
+      - praxis-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: praxis-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:4000/api/v1
+    depends_on:
+      - backend
+    networks:
+      - praxis-net
+
+volumes:
+  mongo_data:
+
+networks:
+  praxis-net:
+    driver: bridge

@@ -22,8 +22,13 @@ const allowedOrigins = env.CORS_ORIGINS.split(',').map((o) => o.trim());
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow requests with no origin (e.g. mobile apps or curl)
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      // allow requests with no origin (e.g. mobile apps or curl) or any localhost port in dev
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes('*') ||
+        (env.NODE_ENV === 'development' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+      ) {
         callback(null, true);
       } else {
         callback(new Error('Blocked by CORS'));

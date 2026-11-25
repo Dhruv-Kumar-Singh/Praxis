@@ -1,12 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import gsap from 'gsap';
 import Background from '../components/Background';
+import LiveInterviewSection from '../components/LiveInterviewSection';
 import { useSpeechToText } from '../hooks/useSpeechToText';
+import { sessionsApi } from '../api/client';
 
 export default function HomePage({ userName = 'Alex', onViewReport }) {
   const [topicInput, setTopicInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState([]);
+
+  // Real interview history from DB
+  const [previousInterviews, setPreviousInterviews] = useState([]);
+  const [interviewsLoading, setInterviewsLoading] = useState(true);
 
   const fileInputRef = useRef(null);
   const greetingRef = useRef(null);
@@ -18,6 +24,93 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
   const { isListening, startListening, stopListening, isSupported: sttSupported } =
     useSpeechToText({ onTranscript: (text) => setTopicInput(text) });
 
+  // ── Load completed past interviews from DB ─────────────────────────────────
+  const loadInterviews = useCallback(async () => {
+    setInterviewsLoading(true);
+    try {
+      const { items = [] } = await sessionsApi.list({ limit: 20 });
+      // Only sessions with a report
+      const done = items.filter((s) =>
+        s.status === 'feedback_ready' || s.status === 'completed'
+      );
+      if (!done.length) {
+        setPreviousInterviews([]);
+        return;
+      }
+      // Fetch reports in parallel
+      const withReports = await Promise.all(
+        done.map(async (session) => {
+          try {
+            const report = await sessionsApi.getReport(session.id);
+            return { session, report };
+          } catch {
+            return { session, report: null };
+          }
+        })
+      );
+      // Map to card shape
+      const cards = withReports
+        .filter(({ report }) => report)
+        .map(({ session, report }) => {
+          const overall = report.overall ?? 0;
+          const verdict =
+            report.verdict ||
+            (overall >= 90 ? 'Strong Hire' :
+            overall >= 75 ? 'Hire' :
+            overall >= 60 ? 'Lean Hire' : 'No Hire');
+          const created = session.createdAt
+            ? new Date(session.createdAt).toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+              })
+            : '—';
+          const durationMin = session.expectedDurationMin ?? 30;
+          return {
+            id: session.id,
+            title: `${session.topic} — AI Technical Interview`,
+            role: session.role || `${session.topic} Engineer`,
+            company: 'Praxis AI',
+            date: created,
+            duration: `${durationMin} mins`,
+            badge: `CONFIDENCE ${overall}%`,
+            type: session.topic,
+            score: overall,
+            verdict,
+            synopsis: report.summary || 'AI-scored technical interview session.',
+            breakdown: report.questionsDetail?.length > 0
+              ? report.questionsDetail.map((q) => ({
+                  label: q.title,
+                  score: q.score,
+                }))
+              : [
+                  { label: 'Technical Problem Solving', score: report.scores?.correctness ?? overall },
+                  { label: 'Communication', score: report.scores?.communication ?? overall },
+                  { label: 'Depth & Trade-offs', score: report.scores?.depth ?? overall },
+                ],
+            strengths: report.strengths ?? [],
+            improvements: report.weaknesses ?? [],
+            questions: (report.questionsDetail ?? []).map((q) => ({
+              title: q.title,
+              score: q.score,
+              feedback: q.feedback,
+            })),
+            // carry full report for onViewReport
+            _session: session,
+            _report: report,
+          };
+        });
+      setPreviousInterviews(cards);
+    } catch (err) {
+      console.warn('Could not load previous interviews:', err);
+      setPreviousInterviews([]);
+    } finally {
+      setInterviewsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInterviews();
+  }, [loadInterviews]);
+
   // Soft entrance animation matching landing page hero
   useEffect(() => {
     const tl = gsap.timeline({ delay: 0.15 });
@@ -28,7 +121,7 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
     );
   }, []);
 
-  // Global intersection observer for fade-up scroll reveal
+  // Global intersection observer for fade-up scroll reveal (re-runs when cards load)
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -42,10 +135,14 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
       { root: null, rootMargin: '0px', threshold: 0.1 }
     );
 
-    document.querySelectorAll('.fade-up, .scale-in').forEach((el) => observer.observe(el));
+    document.querySelectorAll('.fade-up, .scale-in').forEach((el) => {
+      if (!el.classList.contains('visible')) {
+        observer.observe(el);
+      }
+    });
 
     return () => observer.disconnect();
-  }, []);
+  }, [interviewsLoading, previousInterviews.length]);
 
   // Handle file picker selection
   const handleFileSelect = (e) => {
@@ -62,177 +159,6 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
   const removeFile = (id) => {
     setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
   };
-
-  // Sample placeholder interviews matching landing page cards
-  const previousInterviews = [
-    {
-      id: 'int-1',
-      title: 'Distributed Systems: Raft Consensus & WAN Latency',
-      role: 'Staff Distributed Systems Engineer',
-      company: 'Google',
-      date: 'Yesterday',
-      duration: '45 mins',
-      badge: 'CONFIDENCE 92%',
-      type: 'System Design',
-      score: 92,
-      verdict: 'Strong Hire',
-      synopsis: 'Evaluated Raft leader election failure modes, split-brain scenarios, and cross-region replication latency trade-offs.',
-      breakdown: [
-        { label: 'Technical Problem Solving', score: 94 },
-        { label: 'System Architecture', score: 92 },
-        { label: 'Code Quality & Hygiene', score: 90 },
-      ],
-      strengths: [
-        'Precise invariants during Paxos vs Raft leader transitions',
-        'Clean calculation of cross-oceanic P99 network boundaries',
-      ],
-      improvements: [
-        'Explore split-brain handling during WAN fiber cuts in greater depth',
-      ],
-      questions: [
-        { title: 'Design Chubby: A distributed lock service with leases', score: 93, feedback: 'Strong lease duration and state replication strategy.' },
-        { title: 'Mitigating cascading failures in cross-region RPCs', score: 91, feedback: 'Effective use of circuit breakers and jittered deadlines.' },
-      ],
-    },
-    {
-      id: 'int-2',
-      title: 'Concurrent Token Bucket & Distributed Throttling',
-      role: 'Senior Full Stack Engineer',
-      company: 'Stripe',
-      date: 'Sep 10, 2026',
-      duration: '40 mins',
-      badge: 'CONFIDENCE 88%',
-      type: 'Technical',
-      score: 88,
-      verdict: 'Hire',
-      synopsis: 'Thread-safe sliding window rate limiting implementation with Redis backplane and exponential backoff retry jitter.',
-      breakdown: [
-        { label: 'Concurrency Control', score: 90 },
-        { label: 'Distributed State', score: 88 },
-        { label: 'Edge-case Resilience', score: 86 },
-      ],
-      strengths: [
-        'Avoided atomic race conditions using Lua scripts inside Redis',
-        'Clean mathematical derivation of token refresh intervals',
-      ],
-      improvements: [
-        'Mention memory footprint for millions of dynamic tenant keys',
-      ],
-      questions: [
-        { title: 'Implement a concurrent rate limiter in TypeScript', score: 89, feedback: 'Clean atomics, correct unit test fixtures.' },
-      ],
-    },
-    {
-      id: 'int-3',
-      title: 'Engineering Leadership & Cross-Functional Deadlocks',
-      role: 'Engineering Manager & Tech Lead',
-      company: 'Meta',
-      date: 'Sep 06, 2026',
-      duration: '35 mins',
-      badge: 'CONFIDENCE 95%',
-      type: 'Behavioral',
-      score: 95,
-      verdict: 'Strong Hire',
-      synopsis: 'Structured STAR-method delivery on resolving high-stakes architectural disputes and coaching underperforming engineers.',
-      breakdown: [
-        { label: 'STAR Delivery', score: 96 },
-        { label: 'Conflict Resolution', score: 94 },
-        { label: 'Business Impact', score: 95 },
-      ],
-      strengths: [
-        'Clear quantification of engineering velocity and uptime metrics',
-        'High emotional intelligence and empathy demonstrated',
-      ],
-      improvements: [
-        'Keep introductory background concise to focus on decision tradeoffs',
-      ],
-      questions: [
-        { title: 'Resolving deadlocks between product managers and staff engineers', score: 95, feedback: 'Excellent diplomatic framework and outcome.' },
-      ],
-    },
-    {
-      id: 'int-4',
-      title: 'Streaming Inference Gateway & Token Backpressure',
-      role: 'Platform Scalability Engineer',
-      company: 'OpenAI',
-      date: 'Aug 28, 2026',
-      duration: '50 mins',
-      badge: 'CONFIDENCE 91%',
-      type: 'System Design',
-      score: 91,
-      verdict: 'Strong Hire',
-      synopsis: 'Architected multi-tenant isolation layer with gRPC multiplexing sustaining 1M+ req/sec during peak spikes.',
-      breakdown: [
-        { label: 'Gateway Architecture', score: 92 },
-        { label: 'Backpressure Control', score: 90 },
-        { label: 'SLA Reliability', score: 91 },
-      ],
-      strengths: [
-        'Zero-downtime rolling upgrades and canary deployment strategies',
-        'Throttling with fair-share deficit round robin',
-      ],
-      improvements: [
-        'Review connection pooling limits when downstream pods scale rapidly',
-      ],
-      questions: [
-        { title: 'Real-time WebSocket and HTTP/2 stream multiplexing', score: 91, feedback: 'Thorough flow-control mechanism.' },
-      ],
-    },
-    {
-      id: 'int-5',
-      title: 'Low-Level GPU Memory Management & CUDA Kernels',
-      role: 'AI Systems & Infra Engineer',
-      company: 'Anthropic',
-      date: 'Aug 22, 2026',
-      duration: '48 mins',
-      badge: 'CONFIDENCE 84%',
-      type: 'Technical',
-      score: 84,
-      verdict: 'Lean Hire',
-      synopsis: 'Paged KV-cache eviction policies and collective communication primitives (Ring All-Reduce) for multi-node LLM training.',
-      breakdown: [
-        { label: 'Low-Level Systems', score: 86 },
-        { label: 'GPU Memory Mechanics', score: 82 },
-        { label: 'Algorithmic Speed', score: 84 },
-      ],
-      strengths: [
-        'Deep understanding of Megatron-LM tensor and pipeline parallelism',
-      ],
-      improvements: [
-        'Optimize memory bandwidth calculations for newer Blackwell architecture',
-      ],
-      questions: [
-        { title: 'Simulating Ring All-Reduce with non-blocking buffers', score: 85, feedback: 'Sound logic with minimal pipeline bubbles.' },
-      ],
-    },
-    {
-      id: 'int-6',
-      title: 'Payment Idempotency & Two-Phase Transaction Bounds',
-      role: 'Staff Infrastructure Engineer',
-      company: 'Stripe',
-      date: 'Aug 15, 2026',
-      duration: '42 mins',
-      badge: 'CONFIDENCE 94%',
-      type: 'Technical',
-      score: 94,
-      verdict: 'Strong Hire',
-      synopsis: 'Zero-data-loss charging pipelines, idempotency keys, and webhook replay survivability under distributed network partitions.',
-      breakdown: [
-        { label: 'Transactional Consistency', score: 95 },
-        { label: 'Fault Tolerance', score: 93 },
-        { label: 'Database Schema', score: 94 },
-      ],
-      strengths: [
-        'Flawless transactional isolation levels and locking strategy',
-      ],
-      improvements: [
-        'Address long-term cold-storage archiving for audit logs',
-      ],
-      questions: [
-        { title: 'Design an idempotent payment processing endpoint', score: 95, feedback: 'Production-ready architecture.' },
-      ],
-    },
-  ];
 
   return (
     <div className="min-h-screen text-neutral-200 antialiased selection:bg-white/20 selection:text-white relative bg-black">
@@ -351,6 +277,9 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
               {/* Send / start session button */}
               <button
                 type="button"
+                onClick={() => {
+                  document.getElementById('live-interview-section')?.scrollIntoView({ behavior: 'smooth' });
+                }}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${
                   topicInput.trim() || attachedFiles.length > 0
                     ? 'bg-white text-black hover:bg-neutral-200 shadow-[0_0_15px_rgba(255,255,255,0.25)]'
@@ -364,26 +293,37 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
           </div>
         </div>
 
-        {/* Muted scroll indicator hinting at Previous Interviews below the fold */}
+        {/* Scroll indicator hinting at Live Interview Section */}
         <div
           ref={scrollCueRef}
           onClick={() => {
-            document.getElementById('previous-interviews')?.scrollIntoView({ behavior: 'smooth' });
+            document.getElementById('live-interview-section')?.scrollIntoView({ behavior: 'smooth' });
           }}
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer group opacity-0"
-          title="View previous interviews"
+          title="Scroll to Live AI Interview"
         >
-          <span className="text-[10px] font-mono tracking-widest uppercase">Scroll to previous interviews</span>
+          <span className="text-[10px] font-mono tracking-widest uppercase">Start Live AI Interview</span>
           <Icon icon="solar:alt-arrow-down-linear" className="text-xs group-hover:translate-y-1 transition-transform" />
         </div>
       </section>
 
       {/* ============================================================ */}
-      {/* 2. SCROLL-REVEALED SECTION — PREVIOUS INTERVIEWS */}
+      {/* 2. REALTIME LIVEKIT VOICE & CHAT INTERVIEW SECTION */}
+      {/* ============================================================ */}
+      <section id="live-interview-section" className="relative z-10 py-12 bg-black border-t border-white/[0.04]">
+        <LiveInterviewSection
+          initialTopic={topicInput}
+          onViewReport={onViewReport}
+          onInterviewCompleted={loadInterviews}
+        />
+      </section>
+
+      {/* ============================================================ */}
+      {/* 3. SCROLL-REVEALED SECTION — PREVIOUS INTERVIEWS */}
       {/* ============================================================ */}
       <section id="previous-interviews" className="relative z-10 py-24 md:py-32 bg-black border-t border-white/[0.04]">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          {/* Section Header — matching 'Your Interview Dashboard' style */}
+          {/* Section Header */}
           <div className="flex flex-col items-start mb-16 fade-up">
             <h2 className="text-3xl md:text-5xl font-semibold tracking-tight mb-4 text-white">
               Previous Interviews
@@ -393,53 +333,96 @@ export default function HomePage({ userName = 'Alex', onViewReport }) {
             </p>
           </div>
 
-          {/* Responsive Card Grid (grid-cols-1 md:grid-cols-2 lg:grid-cols-3) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {previousInterviews.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => onViewReport && onViewReport(item)}
-                className="rounded-3xl border border-white/10 bg-[#050505] p-7 md:p-8 relative overflow-hidden group hover:border-white/20 transition-all duration-500 hover:-translate-y-1 fade-up shadow-[0_4px_30px_rgba(0,0,0,0.5)] cursor-pointer flex flex-col justify-between"
-              >
-                {/* Background grid accent on hover */}
-                <div className="absolute inset-0 bg-grid opacity-[0.03] pointer-events-none group-hover:opacity-[0.1] transition-opacity" />
+          {/* Loading skeleton */}
+          {interviewsLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="rounded-3xl border border-white/10 bg-[#050505] p-7 md:p-8 animate-pulse h-56 flex flex-col justify-between">
+                  <div>
+                    <div className="h-3 w-28 bg-white/10 rounded mb-4" />
+                    <div className="h-5 w-3/4 bg-white/10 rounded mb-2" />
+                    <div className="h-4 w-full bg-white/5 rounded mb-1" />
+                    <div className="h-4 w-5/6 bg-white/5 rounded" />
+                  </div>
+                  <div className="h-3 w-24 bg-white/5 rounded" />
+                </div>
+              ))}
+            </div>
+          )}
 
-                <div>
-                  {/* Top row: micro-label score badge + date */}
-                  <div className="flex items-center justify-between gap-3 mb-6 relative z-10">
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      <span className="text-[10px] font-mono text-white uppercase tracking-widest">
-                        {item.badge}
+          {/* Empty state */}
+          {!interviewsLoading && previousInterviews.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-center fade-up">
+              <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-4">
+                <Icon icon="solar:clipboard-list-bold-duotone" className="text-3xl text-neutral-500" />
+              </div>
+              <h3 className="text-lg font-medium text-white mb-2">No completed interviews yet</h3>
+              <p className="text-sm text-neutral-400 max-w-sm font-light">
+                Complete your first interview above. After AI evaluation finishes, your results will appear here.
+              </p>
+            </div>
+          )}
+
+          {/* Responsive Card Grid */}
+          {!interviewsLoading && previousInterviews.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {previousInterviews.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => onViewReport && onViewReport(item)}
+                  className="rounded-3xl border border-white/10 bg-[#050505] p-7 md:p-8 relative overflow-hidden group hover:border-white/20 transition-all duration-500 hover:-translate-y-1 fade-up shadow-[0_4px_30px_rgba(0,0,0,0.5)] cursor-pointer flex flex-col justify-between"
+                >
+                  {/* Background grid accent on hover */}
+                  <div className="absolute inset-0 bg-grid opacity-[0.03] pointer-events-none group-hover:opacity-[0.1] transition-opacity" />
+
+                  <div>
+                    {/* Top row: score badge + date */}
+                    <div className="flex items-center justify-between gap-3 mb-6 relative z-10">
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        <span className="text-[10px] font-mono text-white uppercase tracking-widest">
+                          {item.badge}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
+                        {item.date}
                       </span>
                     </div>
 
-                    <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
-                      {item.date}
-                    </span>
+                    {/* Title */}
+                    <h3 className="text-lg sm:text-xl font-semibold text-white tracking-tight group-hover:text-neutral-100 transition-colors mb-2.5 relative z-10">
+                      {item.title}
+                    </h3>
+
+                    {/* Synopsis */}
+                    <p className="text-xs sm:text-sm text-neutral-400 font-light leading-relaxed mb-6 line-clamp-3 relative z-10">
+                      {item.synopsis}
+                    </p>
+
+                    {/* Score bar mini preview */}
+                    <div className="relative z-10 flex items-center gap-2 mb-2">
+                      <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                        <div
+                          className="h-full bg-emerald-400 rounded-full transition-all duration-700"
+                          style={{ width: `${item.score}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono text-emerald-400 flex-shrink-0">{item.score}%</span>
+                      <span className="text-[10px] font-mono text-neutral-500 flex-shrink-0">{item.verdict}</span>
+                    </div>
                   </div>
 
-                  {/* Interview title / topic */}
-                  <h3 className="text-lg sm:text-xl font-semibold text-white tracking-tight group-hover:text-neutral-100 transition-colors mb-2.5 relative z-10">
-                    {item.title}
-                  </h3>
-
-                  {/* Synopsis / takeaway */}
-                  <p className="text-xs sm:text-sm text-neutral-400 font-light leading-relaxed mb-6 line-clamp-3 relative z-10">
-                    {item.synopsis}
-                  </p>
+                  {/* Bottom row */}
+                  <div className="flex items-center justify-between pt-4 border-t border-white/[0.05] text-xs font-mono text-neutral-500 group-hover:text-white transition-colors relative z-10">
+                    <span>{item.duration}</span>
+                    <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                      VIEW DETAILS →
+                    </span>
+                  </div>
                 </div>
-
-                {/* Bottom row: duration and view link */}
-                <div className="flex items-center justify-between pt-4 border-t border-white/[0.05] text-xs font-mono text-neutral-500 group-hover:text-white transition-colors relative z-10">
-                  <span>{item.duration}</span>
-                  <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    VIEW DETAILS →
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

@@ -4,7 +4,7 @@ import HomePage from './pages/HomePage';
 import AnalysisView from './pages/AnalysisView';
 import ProfileView from './pages/ProfileView';
 import LandingPage from './pages/LandingPage';
-import PremiumPlanPage from './pages/PremiumPlanPage';
+// import PremiumPlanPage from './pages/PremiumPlanPage'; // Commented out: reserved for another version of the website
 import NewInterviewModal from './components/NewInterviewModal';
 import InterviewReportPage from './pages/InterviewReportPage';
 import ProHomeView from './pages/ProHomeView';
@@ -96,11 +96,13 @@ export default function App() {
             setCurrentPlan('free');
             setCurrentView('home');
           }}
+          /* onGoToPremium commented out - reserved for another version of the website
           onGoToPremium={() => {
             setPlan('personal');
             setCurrentPlan('premium');
             setCurrentView('home');
           }}
+          */
           onContactSales={handleContactSales}
         />
       </div>
@@ -180,6 +182,7 @@ export default function App() {
       <main>
         {/* ── Personal Plan Views ── */}
         {plan === 'personal' && currentView === 'home' && (
+          /* Premium subscription view commented out - reserved for another version of the website
           currentPlan === 'premium' ? (
             <PremiumPlanPage
               userName="Alex"
@@ -187,7 +190,7 @@ export default function App() {
               onViewReport={handleViewReport}
               onSwitchToFree={() => setCurrentPlan('free')}
             />
-          ) : (
+          ) : */ (
             <HomePage
               userName="Alex"
               onOpenNewInterview={(item) => handleOpenNewInterview(item)}
@@ -203,10 +206,12 @@ export default function App() {
             currentPlan={currentPlan}
             onOpenNewInterview={() => handleOpenNewInterview()}
             onViewReport={handleViewReport}
-            onGoToPremium={() => {
-              setCurrentPlan('premium');
-              setCurrentView('home');
-            }}
+          /* onGoToPremium commented out - reserved for another version of the website
+          onGoToPremium={() => {
+            setCurrentPlan('premium');
+            setCurrentView('home');
+          }}
+          */
           />
         )}
 
