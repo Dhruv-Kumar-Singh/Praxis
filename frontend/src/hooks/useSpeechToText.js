@@ -2,17 +2,17 @@ import { useState, useRef, useCallback } from 'react';
 
 /**
  * useSpeechToText
- * Wraps the native Web Speech API (SpeechRecognition).
- * Streams live transcript into the provided onTranscript callback.
+ * Wraps the native Web Speech API in continuous + interimResults mode.
+ * onTranscript(text, isFinal) is called on every result event.
  *
  * Usage:
- *   const { isListening, startListening, stopListening, isSupported } = useSpeechToText({ onTranscript });
+ *   const { isListening, startListening, stopListening, isSupported } =
+ *     useSpeechToText({ onTranscript });
  */
 export function useSpeechToText({ onTranscript }) {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
 
-  // Check browser support once
   const isSupported =
     typeof window !== 'undefined' &&
     !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -23,7 +23,6 @@ export function useSpeechToText({ onTranscript }) {
       return;
     }
 
-    // If already listening, stop first
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
@@ -33,7 +32,7 @@ export function useSpeechToText({ onTranscript }) {
 
     recognition.lang = 'en-US';
     recognition.interimResults = true;  // stream words live as you speak
-    recognition.continuous = false;     // auto-stop on natural pause
+    recognition.continuous = true;      // keep listening until stopListening() is called
 
     recognition.onstart = () => setIsListening(true);
 
@@ -43,11 +42,17 @@ export function useSpeechToText({ onTranscript }) {
     };
 
     recognition.onresult = (event) => {
-      // Concatenate all result parts into one transcript string
-      const transcript = Array.from(event.results)
-        .map((result) => result[0].transcript)
-        .join('');
-      onTranscript(transcript);
+      let finalText = '';
+      let interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalText += event.results[i][0].transcript;
+        } else {
+          interimText += event.results[i][0].transcript;
+        }
+      }
+      // isFinal=true means the word is committed; isFinal=false means it's a live partial
+      onTranscript(finalText || interimText, finalText !== '');
     };
 
     recognition.onerror = (event) => {
@@ -70,4 +75,3 @@ export function useSpeechToText({ onTranscript }) {
 
   return { isListening, startListening, stopListening, isSupported };
 }
-

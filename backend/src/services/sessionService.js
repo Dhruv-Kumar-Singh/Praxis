@@ -22,9 +22,10 @@ export const sessionService = {
           'X-Internal-Secret': env.ORCHESTRATOR_INTERNAL_SECRET,
         },
         body: JSON.stringify({
+          sessionId: 'pending',
           topic,
           difficulty,
-          expected_duration_min: expectedDurationMin,
+          expectedDurationMin,
         }),
       });
       if (planRes.ok) {
@@ -206,6 +207,7 @@ export const sessionService = {
           difficulty: session.difficulty || data.difficulty || 'medium',
           previousQuestion: data.previousQuestion || '',
           candidateAnswer: data.candidateAnswer || '',
+          questionNumber: data.questionNumber || 1,
           history: data.history || [],
         }),
       });
@@ -227,6 +229,58 @@ export const sessionService = {
     } catch (err) {
       logger.error(`generateNextQuestion error: ${err.message}`);
       throw Errors.INTERNAL(`Failed to generate next question: ${err.message}`);
+    }
+  },
+
+  /**
+   * End an active interview: optionally record any final uncommitted answer chunk,
+   * transition status to 'processing', and enqueue AI evaluation in orchestrator.
+   */
+  async endSession(sessionId, data, user, ip) {
+    const session = await sessionRepo.findById(sessionId);
+    if (!session) throw Errors.NOT_FOUND('Session');
+    if (user.role === 'candidate' && session.candidateId !== user.sub && session.userId !== user.sub) {
+      throw Errors.FORBIDDEN();
+    }
+
+    if (['scheduled', 'in_progress', 'draft'].includes(session.status)) {
+      await sessionRepo.update(sessionId, {
+        status: 'processing',
+        endedAt: session.endedAt || new Date(),
+      });
+    }
+
+    try {
+      const res = await fetch(`${env.ORCHESTRATOR_URL}/internal/sessions/${sessionId}/enqueue-eval`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': env.ORCHESTRATOR_INTERNAL_SECRET,
+        },
+        body: JSON.stringify({
+          lastQuestion: data?.lastQuestion || null,
+          candidateAnswer: data?.candidateAnswer || null,
+          questionNumber: data?.questionNumber || 1,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Orchestrator returned ${res.status}: ${errorText}`);
+      }
+
+      const body = await res.json();
+      await auditRepo.create({
+        action: 'session.end',
+        actorId: user.sub,
+        targetId: sessionId,
+        ip,
+        metadata: { evalStatus: body.status },
+      });
+      return body;
+    } catch (err) {
+      logger.error(`endSession error: ${err.message}`);
+      throw Errors.INTERNAL(`Failed to enqueue session evaluation: ${err.message}`);
     }
   },
 

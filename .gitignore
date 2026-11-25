@@ -78,3 +78,7 @@ coverage/
 .temp/
 tmp/
 temp/
+mongo_data/
+screenshots/
+chrome-debug-profile/
+diagnose.mjs

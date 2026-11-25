@@ -58,6 +58,22 @@ const reportSchema = new Schema(
       type: String,
       default: null,
     },
+    questionsDetail: {
+      type: [
+        {
+          questionId: { type: String, default: '' },
+          title:      { type: String, default: '' },
+          score:      { type: Number, default: 0 },
+          feedback:   { type: String, default: '' },
+          scores: {
+            correctness:   { type: Number, default: 0 },
+            communication: { type: Number, default: 0 },
+            depth:         { type: Number, default: 0 },
+          },
+        },
+      ],
+      default: [],
+    },
     items: {
       type: [reportItemSchema],
       default: [],
